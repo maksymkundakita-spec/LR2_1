@@ -1,6 +1,0 @@
-Flask==2.3.3
-pytest==7.4.0
-requests==2.31.0
-bandit==1.7.5
-pytest-html==4.1.1
-markupsafe==2.1.3
