@@ -46,7 +46,7 @@ jobs:
       
       # Крок 2: Налаштування Python
       - name: 🐍 Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5  # Оновлено до v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'  # Кешує залежності для швидшого виконання
@@ -98,9 +98,9 @@ jobs:
             --tb=short
         continue-on-error: true  # Продовжуємо навіть якщо тести падають
       
-      # Крок 8: Збереження звітів як артефактів
+      # Крок 8: Збереження звітів як артефактів - ВИПРАВЛЕНО v3 -> v4
       - name: 📊 Upload test reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4  # Змінено з v3 на v4
         with:
           name: test-reports-python-${{ matrix.python-version }}
           path: |
@@ -108,6 +108,7 @@ jobs:
             pytest_report.html
             *.log
           retention-days: 30  # Зберігати 30 днів
+          overwrite: true  # Додано для запобігання злиттю артефактів
         if: always()  # Виконується завжди, навіть при помилках
       
       # Крок 9: Відправка повідомлення в Telegram (опціонально)
@@ -162,7 +163,7 @@ jobs:
     if: github.ref == 'refs/heads/main'  # Тільки для main гілки
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4  # Оновлено з v3 до v4
         with:
           fetch-depth: 0
       
