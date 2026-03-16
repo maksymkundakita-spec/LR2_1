@@ -17,7 +17,7 @@ on:
 # Змінні середовища, доступні для всіх job
 env:
   PYTHON_VERSION: '3.10'
-  FLASK_APP: app.py
+  FLASK_APP: LR2_1.py
   FLASK_ENV: testing
 
 # Jobs виконуються паралельно (якщо не вказано needs)
