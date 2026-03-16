@@ -40,7 +40,7 @@ jobs:
     steps:
       # Крок 1: Завантаження коду з репозиторію
       - name: 📥 Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Завантажує всю історію (потрібно для аналізу)
       
