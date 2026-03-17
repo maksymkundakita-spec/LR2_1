@@ -6,95 +6,92 @@ from app import app
 
 BASE_URL = "http://localhost:5000"
 
+
 @pytest.fixture(scope="session")
 def flask_app():
     """Запускає Flask додаток для тестування"""
-    # Запускаємо Flask у окремому потоці
-    thread = threading.Thread(target=app.run, kwargs={'debug': False, 'use_reloader': False})
+    thread = threading.Thread(
+        target=app.run,
+        kwargs={'debug': False, 'use_reloader': False}
+    )
     thread.daemon = True
     thread.start()
-    time.sleep(2)  # Чекаємо запуску
+    time.sleep(2)
     yield
-    # Після тестів зупиняємо (нічого не робимо, бо daemon thread)
 
-def test_sql_injection_login(flask_app):
-    """Тест на SQL Injection через форму логіну"""
-    # Спроба обійти автентифікацію
+
+# SQL Injection (має бути ЗАХИЩЕНО)
+def test_sql_injection_login_protected(flask_app):
     payload = {"username": "admin' --", "password": "anything"}
     response = requests.post(f"{BASE_URL}/login", data=payload)
-    
-    # Перевіряємо, чи атака вдалася (чи редірект на dashboard)
-    assert response.url == f"{BASE_URL}/dashboard" or "Welcome" in response.text, \
-        "SQL Injection вразливість не виявлена або її немає"
-    
 
-def test_xss_search(flask_app):
-    """Тест на XSS через параметр пошуку"""
+    assert not (
+        response.url == f"{BASE_URL}/dashboard" or "Welcome" in response.text
+    ), "SQL Injection працює! Система НЕ захищена"
+
+
+# XSS (має бути екранування)
+def test_xss_search_protected(flask_app):
     xss_payload = "<script>alert('XSS')</script>"
     response = requests.get(f"{BASE_URL}/search", params={"q": xss_payload})
-    
-    # Перевіряємо, чи повертається скрипт без екранування
-    assert xss_payload in response.text, \
-        "XSS вразливість не виявлена (можливо виведення екранується)"
-    
-    # Також перевіряємо головну сторінку
+
+    assert xss_payload not in response.text, \
+        "XSS вразливість у search!"
+
     response2 = requests.get(f"{BASE_URL}", params={"name": xss_payload})
-    assert xss_payload in response2.text, \
-        "XSS на головній сторінці не виявлено"
 
-def test_xss_api(flask_app):
-    """Тест на XSS через API ендпоінт"""
+    assert xss_payload not in response2.text, \
+        "XSS на головній сторінці!"
+
+
+# API має повертати безпечні дані (не HTML)
+def test_xss_api_protected(flask_app):
     response = requests.get(f"{BASE_URL}/api/user/1")
-    
-    assert "<div>" in response.text, "API не повертає HTML"
 
-def test_idor_transfer(flask_app):
-    """Тест на IDOR - спроба переказу з чужого рахунку"""
+    assert "<script>" not in response.text, \
+        "XSS в API!"
+
+    # краще перевірити що це JSON
+    assert "application/json" in response.headers.get("Content-Type", ""), \
+        "API повертає не JSON"
+
+
+# IDOR має бути заблокований
+def test_idor_transfer_protected(flask_app):
     payload = {
-        "from_account": "ACC1002",  # Чужий рахунок
+        "from_account": "ACC1002",
         "to_account": "ACC9999",
         "amount": "1000"
     }
-    
-    # Спочатку треба залогінитися
+
     session = requests.Session()
     session.post(f"{BASE_URL}/login", data={"username": "user", "password": "userpass"})
-    
-    # Виконуємо переказ
+
     response = session.post(f"{BASE_URL}/transfer", data=payload)
-    
-    # Перевіряємо, чи транзакція пройшла
-    assert "Transferred" in response.text, \
-        "IDOR вразливість: переказ з чужого рахунку можливий"
-    
-    # Якщо тест пройшов - значить атака вдалася (додаток вразливий)
 
-def test_csrf_admin(flask_app):
-    """Тест на CSRF - зміна налаштувань без токену"""
-    # У формі admin.html немає CSRF токену
-    
-    # Створюємо підроблений запит (імітуємо атаку)
+    assert "Transferred" not in response.text, \
+        "IDOR: можна переказати з чужого рахунку!"
+
+
+# CSRF має бути захищений
+def test_csrf_admin_protected(flask_app):
     payload = {"site_name": "Hacked Site"}
-    
-    # Важливо: тут немає cookies, це імітує атаку з іншого сайту
-    response = requests.post(f"{BASE_URL}/admin/update", data=payload)
-    
-    # Перевіряємо, чи зміни застосувалися
-    assert "Site name updated to Hacked Site" in response.text, \
-        "CSRF захист відсутній або є"
-    
-    # Якщо тест пройшов - значить атака вдалася (додаток вразливий)
 
-def test_combined_sql_and_xss(flask_app):
-    """Комбінований тест - SQL Injection для отримання даних + XSS"""
-    # Отримуємо дані через SQL Injection
+    response = requests.post(f"{BASE_URL}/admin/update", data=payload)
+
+    assert "Site name updated" not in response.text, \
+        "CSRF атака спрацювала!"
+
+
+# Комбінована атака (SQL Injection)
+def test_combined_sql_and_xss_protected(flask_app):
     payload = {"username": "' OR 1=1 --", "password": "anything"}
-    response = requests.post(f"{BASE_URL}/login", data=payload, allow_redirects=False)
-    
-    # Перевіряємо чи є редірект (успішний логін)
-    if response.status_code == 302:
-        # Якщо вдалося залогінитися, значить SQL Injection працює
-        print("SQL Injection успішний - можна отримати всіх користувачів")
-        assert True
-    else:
-        assert False, "SQL Injection не спрацював"
+
+    response = requests.post(
+        f"{BASE_URL}/login",
+        data=payload,
+        allow_redirects=False
+    )
+
+    assert response.status_code != 302, \
+        "SQL Injection дозволяє логін!"
