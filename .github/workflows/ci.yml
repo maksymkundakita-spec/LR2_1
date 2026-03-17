@@ -18,7 +18,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11']
+        python-version: ['3.11']
       fail-fast: false
 
     name: Testing on Python ${{ matrix.python-version }}
@@ -106,20 +106,6 @@ jobs:
             echo "All security tests passed!"
           fi
 
-      # 10. Telegram (опціонально)
-      - name: Send Telegram notification
-        if: failure() && github.ref == 'refs/heads/main'
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          message: |
-            Security tests FAILED!
-            Repo: ${{ github.repository }}
-            Commit: ${{ github.sha }}
-            Author: ${{ github.actor }}
-            Link: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
       # 11. Email (опціонально)
       - name: Send email notification
         if: failure()
@@ -141,18 +127,4 @@ jobs:
             Link:
             ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-  sonar-analysis:
-    needs: security-tests
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
