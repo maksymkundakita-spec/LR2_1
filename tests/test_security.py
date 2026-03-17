@@ -2,7 +2,7 @@ import requests
 import pytest
 import time
 import threading
-from app import app
+from LR2_1 import app
 
 BASE_URL = "http://localhost:5000"
 
