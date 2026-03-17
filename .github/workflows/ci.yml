@@ -1,110 +1,80 @@
-# Назва робочого процесу (відображається у вкладці Actions)
 name: Security Tests for Lab 3
 
-# Події, які запускають цей workflow
 on:
-  # Запуск при push в гілку main
   push:
     branches: [ "main", "master" ]
-  
-  # Запуск при створенні Pull Request в гілку main
   pull_request:
     branches: [ "main", "master" ]
-  
-  # Можливість запуску вручну з інтерфейсу GitHub
   workflow_dispatch:
 
-# Змінні середовища, доступні для всіх job
 env:
   PYTHON_VERSION: '3.10'
   FLASK_APP: LR2_v1.py
   FLASK_ENV: testing
 
-# Jobs виконуються паралельно (якщо не вказано needs)
 jobs:
-  # Назва першого завдання
   security-tests:
-    # Назва виконавця (віртуальної машини)
     runs-on: ubuntu-latest
-    
-    # Стратегія матриці (можна тестувати на різних версіях)
+
     strategy:
       matrix:
         python-version: ['3.9', '3.10', '3.11']
-      fail-fast: false  # Не зупиняти всі тести при першій помилці
-    
-    # Назва для відображення
+      fail-fast: false
+
     name: Testing on Python ${{ matrix.python-version }}
-    
-    # Кроки виконання
+
     steps:
-      # Крок 1: Завантаження коду з репозиторію
+      # 1. Checkout
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Завантажує всю історію (потрібно для аналізу)
-      
-      # Крок 2: Налаштування Python
+          fetch-depth: 0
+
+      # 2. Setup Python
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'  # Кешує залежності для швидшого виконання
-      
-      # Крок 3: Встановлення залежностей
+          cache: 'pip'
+
+      # 3. Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip list  # Показує встановлені пакети (для логу)
-      
-      # Крок 4: Статичний аналіз коду за допомогою Bandit
+
+      # 4. Bandit (без падіння pipeline)
       - name: Run Bandit static analysis
         run: |
-          echo "Запуск Bandit для статичного аналізу безпеки..."
+          echo "Running Bandit..."
           bandit -r . -f html -o bandit_report.html || true
-          echo "Bandit аналіз завершено"
-      
-      # Крок 5: Підготовка до запуску динамічних тестів
-      - name: Prepare for dynamic tests
+
+      # 5. Prepare DB
+      - name: Prepare database
         run: |
-          echo "Перевірка наявності тестів..."
-          ls -la tests/
-          echo "Створення бази даних для тестів..."
-          # Створюємо БД для тестів
-          python -c "from LR2_v1 import init_db; init_db()" || echo "БД створено"
-      
-      # Крок 6: Запуск Flask додатку у фоновому режимі
+          echo "Init test DB..."
+          python -c "from LR2_v1 import init_db; init_db()" || echo "DB already exists"
+
+      # 6. Start Flask
       - name: Start Flask application
         run: |
-          echo "Запуск Flask додатку на порту 5000..."
-          # Використовуємо правильну назву файлу
+          echo "Starting Flask..."
           python LR2_v1.py &
-          FLASK_PID=$!
-          echo "Flask запущено з PID: $FLASK_PID"
-          
-          # Чекаємо поки додаток запуститься
-          echo "Очікування запуску Flask..."
-          sleep 8
-          
-          # Перевіряємо чи додаток працює
-          echo "Перевірка доступності Flask..."
-          if curl -s -I http://localhost:5000 | grep -q "200 OK"; then
-            echo "Flask додаток успішно запущено!"
-          else
-            echo "ПОМИЛКА: Flask не запустився на порту 5000"
-            # Показуємо логи для діагностики
-            echo "Процеси Flask:"
-            ps aux | grep python
-            exit 1
-          fi
-      
-      # Крок 7: Запуск динамічних тестів з Pytest
+          echo "Waiting for Flask..."
+
+          for i in {1..10}; do
+            if curl -s http://localhost:5000 > /dev/null; then
+              echo "Flask is ready!"
+              break
+            fi
+            echo "Waiting..."
+            sleep 2
+          done
+
+      # 7. Run tests
       - name: Run Pytest security tests
         id: pytest
         run: |
-          echo "Запуск тестів безпеки..."
-          # Додаємо поточну директорію до PYTHONPATH для імпорту LR2_v1
           export PYTHONPATH=$PYTHONPATH:$(pwd)
           pytest tests/ -v \
             --tb=long \
@@ -112,22 +82,31 @@ jobs:
             --junitxml=report.xml \
             --html=pytest_report.html \
             --self-contained-html
-        continue-on-error: true  # Продовжуємо навіть якщо тести падають
-      
-      # Крок 8: Збереження звітів як артефактів
+
+      # 8. Upload reports
       - name: Upload test reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports-python-${{ matrix.python-version }}
+          name: reports-python-${{ matrix.python-version }}
           path: |
             bandit_report.html
             pytest_report.html
-            *.log
+            report.xml
           retention-days: 30
-          overwrite: true
+
+      # 9. Check result (правильна логіка!)
+      - name: Check test status
         if: always()
-      
-      # Крок 9: Відправка повідомлення в Telegram (опціонально)
+        run: |
+          if grep -q "<failure" report.xml; then
+            echo "Security tests FAILED!"
+            exit 1
+          else
+            echo "All security tests passed!"
+          fi
+
+      # 10. Telegram (опціонально)
       - name: Send Telegram notification
         if: failure() && github.ref == 'refs/heads/main'
         uses: appleboy/telegram-action@master
@@ -135,54 +114,43 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
-            Тести безпеки провалені!
-            Репозиторій: ${{ github.repository }}
-            Коміт: ${{ github.sha }}
-            Автор: ${{ github.actor }}
-            Посилання: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      
-      # Крок 10: Відправка повідомлення на email (опціонально)
+            Security tests FAILED!
+            Repo: ${{ github.repository }}
+            Commit: ${{ github.sha }}
+            Author: ${{ github.actor }}
+            Link: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      # 11. Email (опціонально)
       - name: Send email notification
         if: failure()
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
           server_port: 465
-          username: ${{secrets.MAIL_USERNAME}}
-          password: ${{secrets.MAIL_PASSWORD}}
-          subject: "Security Tests Failed: ${{ github.repository }}"
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "Security Tests Failed"
           to: your-email@example.com
           from: GitHub Actions
           body: |
-            Тести безпеки провалені!
-            
-            Репозиторій: ${{ github.repository }}
-            Коміт: ${{ github.sha }}
-            Автор: ${{ github.actor }}
-            
-            Посилання на звіт: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      
-      # Крок 11: Перевірка статусу тестів
-      - name: Check test status
-        run: |
-          if [[ "${{ steps.pytest.outcome }}" == "failure" ]]; then
-            echo "Деякі тести безпеки провалені!"
-            exit 1
-          else
-            echo "Всі тести безпеки пройдено!"
-          fi
+            Security tests failed!
 
-  # Додаткове завдання: аналіз коду з SonarCloud
+            Repo: ${{ github.repository }}
+            Commit: ${{ github.sha }}
+
+            Link:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
   sonar-analysis:
     needs: security-tests
     runs-on: ubuntu-latest
-    if: github.ref == 're fs/heads/main'
-    
+    if: github.ref == 'refs/heads/main'
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
         env:
