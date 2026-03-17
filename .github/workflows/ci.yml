@@ -107,10 +107,11 @@ jobs:
           # Додаємо поточну директорію до PYTHONPATH для імпорту LR2_v1
           export PYTHONPATH=$PYTHONPATH:$(pwd)
           pytest tests/ -v \
+            --tb=long \
+            -rA \
+            --junitxml=report.xml \
             --html=pytest_report.html \
-            --self-contained-html \
-            --maxfail=1 \
-            --tb=short
+            --self-contained-html
         continue-on-error: true  # Продовжуємо навіть якщо тести падають
       
       # Крок 8: Збереження звітів як артефактів
