@@ -17,7 +17,7 @@ on:
 # Змінні середовища, доступні для всіх job
 env:
   PYTHON_VERSION: '3.10'
-  FLASK_APP: LR2_v1.py  # Змінено з app.py на LR2_v1.py
+  FLASK_APP: LR2_v1.py
   FLASK_ENV: testing
 
 # Jobs виконуються паралельно (якщо не вказано needs)
@@ -39,34 +39,34 @@ jobs:
     # Кроки виконання
     steps:
       # Крок 1: Завантаження коду з репозиторію
-      - name: 📥 Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Завантажує всю історію (потрібно для аналізу)
       
       # Крок 2: Налаштування Python
-      - name: 🐍 Set up Python ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'  # Кешує залежності для швидшого виконання
       
       # Крок 3: Встановлення залежностей
-      - name: 📦 Install dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip list  # Показує встановлені пакети (для логу)
       
       # Крок 4: Статичний аналіз коду за допомогою Bandit
-      - name: 🔍 Run Bandit static analysis
+      - name: Run Bandit static analysis
         run: |
           echo "Запуск Bandit для статичного аналізу безпеки..."
           bandit -r . -f html -o bandit_report.html || true
           echo "Bandit аналіз завершено"
       
       # Крок 5: Підготовка до запуску динамічних тестів
-      - name: 🔧 Prepare for dynamic tests
+      - name: Prepare for dynamic tests
         run: |
           echo "Перевірка наявності тестів..."
           ls -la tests/
@@ -75,7 +75,7 @@ jobs:
           python -c "from LR2_v1 import init_db; init_db()" || echo "БД створено"
       
       # Крок 6: Запуск Flask додатку у фоновому режимі
-      - name: 🚀 Start Flask application
+      - name: Start Flask application
         run: |
           echo "Запуск Flask додатку на порту 5000..."
           # Використовуємо правильну назву файлу
@@ -90,9 +90,9 @@ jobs:
           # Перевіряємо чи додаток працює
           echo "Перевірка доступності Flask..."
           if curl -s -I http://localhost:5000 | grep -q "200 OK"; then
-            echo "✅ Flask додаток успішно запущено!"
+            echo "Flask додаток успішно запущено!"
           else
-            echo "❌ ПОМИЛКА: Flask не запустився на порту 5000"
+            echo "ПОМИЛКА: Flask не запустився на порту 5000"
             # Показуємо логи для діагностики
             echo "Процеси Flask:"
             ps aux | grep python
@@ -100,7 +100,7 @@ jobs:
           fi
       
       # Крок 7: Запуск динамічних тестів з Pytest
-      - name: 🧪 Run Pytest security tests
+      - name: Run Pytest security tests
         id: pytest
         run: |
           echo "Запуск тестів безпеки..."
@@ -114,7 +114,7 @@ jobs:
         continue-on-error: true  # Продовжуємо навіть якщо тести падають
       
       # Крок 8: Збереження звітів як артефактів
-      - name: 📊 Upload test reports
+      - name: Upload test reports
         uses: actions/upload-artifact@v4
         with:
           name: test-reports-python-${{ matrix.python-version }}
@@ -127,21 +127,21 @@ jobs:
         if: always()
       
       # Крок 9: Відправка повідомлення в Telegram (опціонально)
-      - name: 📱 Send Telegram notification
+      - name: Send Telegram notification
         if: failure() && github.ref == 'refs/heads/main'
         uses: appleboy/telegram-action@master
         with:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: |
-            ❌ Тести безпеки провалені!
+            Тести безпеки провалені!
             Репозиторій: ${{ github.repository }}
             Коміт: ${{ github.sha }}
             Автор: ${{ github.actor }}
             Посилання: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       
       # Крок 10: Відправка повідомлення на email (опціонально)
-      - name: 📧 Send email notification
+      - name: Send email notification
         if: failure()
         uses: dawidd6/action-send-mail@v3
         with:
@@ -149,7 +149,7 @@ jobs:
           server_port: 465
           username: ${{secrets.MAIL_USERNAME}}
           password: ${{secrets.MAIL_PASSWORD}}
-          subject: "❌ Security Tests Failed: ${{ github.repository }}"
+          subject: "Security Tests Failed: ${{ github.repository }}"
           to: your-email@example.com
           from: GitHub Actions
           body: |
@@ -162,13 +162,13 @@ jobs:
             Посилання на звіт: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       
       # Крок 11: Перевірка статусу тестів
-      - name: ✅ Check test status
+      - name: Check test status
         run: |
           if [[ "${{ steps.pytest.outcome }}" == "failure" ]]; then
-            echo "❌ Деякі тести безпеки провалені!"
+            echo "Деякі тести безпеки провалені!"
             exit 1
           else
-            echo "✅ Всі тести безпеки пройдено!"
+            echo "Всі тести безпеки пройдено!"
           fi
 
   # Додаткове завдання: аналіз коду з SonarCloud
