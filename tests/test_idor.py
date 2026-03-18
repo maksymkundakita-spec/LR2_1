@@ -2,7 +2,7 @@ import requests
 
 BASE_URL = "http://localhost:5000"
 
-def test_idor_transfer_protected(flask_app):
+def test_idor_transfer_protected():
     payload = {
         "from_account": "ACC1002",
         "to_account": "ACC9999",
