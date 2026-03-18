@@ -2,7 +2,7 @@ import requests
 
 BASE_URL = "http://localhost:5000"
 
-def test_csrf_admin_protected(flask_app):
+def test_csrf_admin_protected():
     payload = {"site_name": "Hacked Site"}
 
     response = requests.post(f"{BASE_URL}/admin/update", data=payload)
