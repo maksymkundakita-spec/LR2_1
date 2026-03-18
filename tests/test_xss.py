@@ -2,7 +2,7 @@ import requests
 
 BASE_URL = "http://localhost:5000"
 
-def test_xss_search_protected(flask_app):
+def test_xss_search_protected():
     xss_payload = "<script>alert('XSS')</script>"
     
     response = requests.get(f"{BASE_URL}/search", params={"q": xss_payload})
