@@ -2,7 +2,7 @@ import requests
 
 BASE_URL = "http://localhost:5000"
 
-def test_sql_injection_login_protected(flask_app):
+def test_sql_injection_login_protected():
     payload = {"username": "admin' --", "password": "anything"}
     response = requests.post(f"{BASE_URL}/login", data=payload)
 
