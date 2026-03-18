@@ -2,13 +2,12 @@ name: Security Tests for Lab 3
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
   workflow_dispatch:
 
 env:
-  PYTHON_VERSION: '3.10'
   FLASK_APP: LR2_v1.py
   FLASK_ENV: testing
 
@@ -19,23 +18,18 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.11']
-      fail-fast: false
-
-    name: Testing on Python ${{ matrix.python-version }}
 
     steps:
       # 1. Checkout
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       # 2. Setup Python
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'
+          cache: pip
 
       # 3. Install dependencies
       - name: Install dependencies
@@ -43,39 +37,36 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4. Bandit (без падіння pipeline)
-      - name: Run Bandit static analysis
-        run: |
-          echo "Running Bandit..."
-          bandit -r . -f html -o bandit_report.html || true
+      # 4. Fix PYTHONPATH (ВАЖЛИВО)
+      - name: Set PYTHONPATH
+        run: echo "PYTHONPATH=$(pwd)" >> $GITHUB_ENV
 
-      # 5. Prepare DB
+      # 5. Bandit
+      - name: Run Bandit
+        run: bandit -r . -f html -o bandit_report.html || true
+
+      # 6. Init DB
       - name: Prepare database
-        run: |
-          echo "Init test DB..."
-          python -c "from LR2_v1 import init_db; init_db()" || echo "DB already exists"
+        run: python -c "from LR2_v1 import init_db; init_db()" || true
 
-      # 6. Start Flask
-      - name: Start Flask application
+      # 7. Start Flask
+      - name: Start Flask
         run: |
-          echo "Starting Flask..."
           python LR2_v1.py &
-          echo "Waiting for Flask..."
+          sleep 3
 
-          for i in {1..10}; do
+          echo "Waiting for Flask..."
+          for i in {1..15}; do
             if curl -s http://localhost:5000 > /dev/null; then
               echo "Flask is ready!"
               break
             fi
-            echo "Waiting..."
             sleep 2
           done
 
-      # 7. Run tests
-      - name: Run Pytest security tests
-        id: pytest
+      # 8. Run tests
+      - name: Run Pytest
         run: |
-          export PYTHONPATH=$PYTHONPATH:$(pwd)
           pytest tests/ -v \
             --tb=long \
             -rA \
@@ -83,48 +74,26 @@ jobs:
             --html=pytest_report.html \
             --self-contained-html
 
-      # 8. Upload reports
-      - name: Upload test reports
+      # 9. Upload reports
+      - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: reports-python-${{ matrix.python-version }}
+          name: reports
           path: |
             bandit_report.html
             pytest_report.html
             report.xml
-          retention-days: 30
 
-      # 9. Check result (правильна логіка!)
+      # 10. Check result (PASS = захищено)
       - name: Check test status
         if: always()
         run: |
           if grep -q "<failure" report.xml; then
-            echo "Security tests FAILED!"
+            echo "❌ Security tests FAILED"
             exit 1
           else
-            echo "All security tests passed!"
+            echo "✅ PASS - система захищена"
           fi
-
-      # 11. Email (опціонально)
-      - name: Send email notification
-        if: failure()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "Security Tests Failed"
-          to: your-email@example.com
-          from: GitHub Actions
-          body: |
-            Security tests failed!
-
-            Repo: ${{ github.repository }}
-            Commit: ${{ github.sha }}
-
-            Link:
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 
